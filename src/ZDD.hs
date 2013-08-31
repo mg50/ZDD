@@ -64,8 +64,8 @@ toList store id = case M.lookup id (nodesById store) of
   Just (ZNode val hiId loId) -> map (val:) (toList store hiId) ++ toList store loId
   Nothing -> error $ "could not find node with id: " ++ show id
 
-union :: (Ord a) => ZStore a -> ZNode a -> ZNode a -> (ZNode a, ZStore a)
-union store n1 n2 = runState (go n1 n2) store
+union' :: (Ord a) => ZNode a -> ZNode a -> ZStore a -> (ZNode a, ZStore a)
+union' n1 n2 store = runState (go n1 n2) store
   where go Bottom node = return node
         go node Bottom = return node
         go Top Top = return Top
@@ -108,6 +108,12 @@ union store n1 n2 = runState (go n1 n2) store
 
 type ZDDM a = State (ZStore a)
 
+union :: (Ord a) => ZNode a -> ZNode a -> ZDDM a (ZNode a)
+union x y = do store <- get
+               let (node, store') = union' x y store
+               put store'
+               return node
+
 runZDD :: (Ord a) => ZDDM a (ZNode a) -> (ZNode a, ZStore a)
 runZDD m = runState m emptyZStore
 
@@ -125,8 +131,34 @@ family :: (Ord a) => [[a]] -> ZDDM a (ZNode a)
 family [] = return Bottom
 family (x:xs) = do node <- family xs
                    node' <- allElems x
-                   unionM node node'
-  where unionM x y = do store <- get
-                        let (n, store') = union store x y
-                        put store'
-                        return n
+                   union node node'
+
+intersection :: (Ord a) => ZNode a -> ZNode a -> ZDDM a (ZNode a)
+intersection Bottom _ = return Bottom
+intersection _ Bottom = return Bottom
+intersection Top Top = return Top
+intersection Top node = do
+  lo <- lookupById (loId node) <$> get
+  intersection Top lo
+intersection node Top = intersection Top node
+intersection n1 n2 | n1 == n2 = return n1
+                   | value n1 == value n2 = do let ZNode v1 hiId1 loId1 = n1
+                                                   ZNode v2 hiId2 loId2 = n2
+
+                                               hi1 <- lookupById hiId1 <$> get
+                                               hi2 <- lookupById hiId2 <$> get
+                                               lo1 <- lookupById loId1 <$> get
+                                               lo2 <- lookupById loId2 <$> get
+
+                                               hi' <- intersection hi1 hi2
+                                               hiId' <- lookupByNode hi' <$> get
+                                               lo' <- intersection lo1 lo2
+                                               loId' <- lookupByNode lo' <$> get
+
+
+                                               let node = ZNode v1 hiId' loId'
+                                               modify (insert node)
+                                               return node
+                   | value n1 < value n2 = do lo <- lookupById (loId n1) <$> get
+                                              intersection lo n2
+                   | otherwise = intersection n2 n1
