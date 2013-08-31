@@ -2,8 +2,12 @@
 module ZDD where
 import Prelude hiding (lookup)
 import qualified Data.Map as M
+import qualified Data.List as L
 import Data.Maybe
 import Control.Monad
+import Control.Monad.State
+import Control.Applicative ((<$>))
+import Debug.Trace
 
 data ZNode a = ZNode { value :: a
                      , hiId :: Int
@@ -61,25 +65,68 @@ toList store id = case M.lookup id (nodesById store) of
   Nothing -> error $ "could not find node with id: " ++ show id
 
 union :: (Ord a) => ZStore a -> ZNode a -> ZNode a -> (ZNode a, ZStore a)
-union store Bottom node = (node, store)
-union store node Bottom = (node, store)
-union store Top Top = (Top, store)
-union store Top Bottom = (Top, store)
-union store (ZNode v hiId loId) Top = let lo = lookupById loId store
-                                          (lo', store') = union store lo Top
-                                          loId' = lookupByNode lo' store
-                                          node' = ZNode v hiId loId'
-                                      in (node', insert node' store')
-union store Top node = union store node Top
+union store n1 n2 = runState (go n1 n2) store
+  where go Bottom node = return node
+        go node Bottom = return node
+        go Top Top = return Top
+        go (ZNode v hiId loId) Top = do lo <- byId loId
+                                        lo' <- go lo Top
+                                        loId' <- byNode lo'
+                                        let node = ZNode v hiId loId'
+                                        modify (insert node)
+                                        return node
+        go Top n = go n Top
+        go n1 n2 | n1 == n2 = return n1
+        go n1 n2 | value n1 == value n2 = do let ZNode v1 hiId1 loId1 = n1
+                                                 ZNode v2 hiId2 loId2 = n2
+                                             lo1 <- byId loId1
+                                             lo2 <- byId loId2
+                                             hi1 <- byId hiId1
+                                             hi2 <- byId hiId2
+
+                                             hi' <- go hi1 hi2
+                                             hiId' <- byNode hi'
+                                             lo' <- go lo1 lo2
+                                             loId' <- byNode lo'
+
+                                             let node = ZNode v1 hiId' loId'
+                                             modify (insert node)
+                                             return node
+
+        go n1 n2 | value n1 < value n2 = do let ZNode v hiId loId = n1
+                                            lo <- byId loId
+                                            lo' <- go lo n2
+                                            loId' <- byNode lo'
+                                            let node = ZNode v hiId loId'
+                                            modify (insert node)
+                                            return node
+        go n1 n2 | otherwise = go n2 n1
+
+        byId x = lookupById x <$> get
+        byNode x = lookupByNode x <$> get
 
 
+type ZDDM a = State (ZStore a)
 
-union store n1 n2 | n1 == n2 = (n1, store)
-                  | value n1 == value n2 = undefined
-                  | value n1 < value n2 =
-                    let ZNode v hi lo = n1
-                        (hi', store') = union store (lookupById hi store) n2
-                        hi'id = lookupByNode hi' store'
-                        n1' = ZNode v hi'id lo
-                    in (n1', insert n1' store)
-                  | value n1 > value n2  = union store n2 n1
+runZDD :: (Ord a) => ZDDM a (ZNode a) -> (ZNode a, ZStore a)
+runZDD m = runState m emptyZStore
+
+allElems :: (Ord a) => [a] -> ZDDM a (ZNode a)
+allElems xs = go xs'
+  where xs' = L.sort $ L.nub xs
+        go [] = return Top
+        go (x:xs) = do node <- go xs
+                       hiId <- lookupByNode node <$> get
+                       let node' = ZNode x hiId 0
+                       modify (insert node')
+                       return node'
+
+family :: (Ord a) => [[a]] -> ZDDM a (ZNode a)
+family [] = return Bottom
+family (x:xs) = do node <- family xs
+                   node' <- allElems x
+                   unionM node node'
+  where unionM x y = do store <- get
+                        let (n, store') = union store x y
+                        put store'
+                        return n
