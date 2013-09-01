@@ -7,63 +7,63 @@ import DSL
 import qualified Data.List as L
 import qualified Data.Set as S
 
-shouldMatch :: ZDDM Int (ZNode Int) -> [[Int]] -> IO ()
-shouldMatch m fam = let (node, store) = runZDD m
-                        fam' = toList store (lookupByNode node store)
-                    in S.fromList (map L.nub fam) `shouldBe` S.fromList fam'
+hasSpan :: ZDDM Int (ZNode Int) -> [[Int]] -> IO ()
+hasSpan m fam = let (node, store) = runZDD m
+                    fam' = toList store (lookupByNode node store)
+                in S.fromList (map L.nub fam) `shouldBe` S.fromList fam'
 
 debug m = print $ runZDD m
 
 spec = do
   describe "allElems" $ do
     it "constructs top from an empty list" $ do
-      allElems [] `shouldMatch` [[]]
+      allElems [] `hasSpan` [[]]
     it "constructs ZDD of elements from a list" $ do
-      allElems [3, 4, 8] `shouldMatch` [[3, 4, 8]]
+      allElems [3, 4, 8] `hasSpan` [[3, 4, 8]]
     it "eliminates duplicate nodes" $ do
-      allElems [2, 3, 4, 2] `shouldMatch` [[2..4]]
+      allElems [2, 3, 4, 2] `hasSpan` [[2..4]]
 
   describe "union" $ do
     it "takes the union of boring cases" $ do
-      union Top Top `shouldMatch` [[]]
-      union Top Bottom `shouldMatch` [[]]
-      union Bottom Top `shouldMatch` [[]]
-      union Bottom Bottom `shouldMatch` []
+      union Top Top `hasSpan` [[]]
+      union Top Bottom `hasSpan` [[]]
+      union Bottom Top `hasSpan` [[]]
+      union Bottom Bottom `hasSpan` []
 
     it "takes the union of nodes with bottom" $ do
       let node = allElems [1..6]
-      (node >>= (Bottom `union`)) `shouldMatch` [[1..6]]
-      (node >>= (`union` Bottom)) `shouldMatch` [[1..6]]
+      (node >>= (Bottom `union`)) `hasSpan` [[1..6]]
+      (node >>= (`union` Bottom)) `hasSpan` [[1..6]]
 
     it "takes the union of a node with top" $ do
       let node = allElems [1..6]
-      (node >>= (`union` Top)) `shouldMatch` [[1..6], []]
-      (node >>= (Top `union`)) `shouldMatch` [[1..6], []]
+      (node >>= (`union` Top)) `hasSpan` [[1..6], []]
+      (node >>= (Top `union`)) `hasSpan` [[1..6], []]
 
     it "takes the union of a simple node with itself" $ do
       let result = do x <- allElems [1..6]
                       y <- allElems [1..6]
                       union x y
-      result `shouldMatch` [[1..6]]
+      result `hasSpan` [[1..6]]
 
     it "takes the union of two nodes with equal root" $ do
       let result = do x <- allElems [1..6]
                       y <- allElems [1..7]
                       union x y
 
-      result `shouldMatch` [[1..6], [1..7]]
+      result `hasSpan` [[1..6], [1..7]]
 
     it "takes the union of two nodes with different root" $ do
       let result = do x <- allElems [1..6]
                       y <- allElems [2..7]
                       union x y
 
-      result `shouldMatch` [[1..6], [2..7]]
+      result `hasSpan` [[1..6], [2..7]]
 
   describe "family" $ do
     it "converts a family into a ZDD" $ do
       let fam = [[1..3], [2..5], [2, 4], []]
-      family fam `shouldMatch` fam
+      family fam `hasSpan` fam
 
     it "constructs the same node" $ do
       let fam = [[1..3], [2..5], [2, 4], []]
@@ -74,10 +74,10 @@ spec = do
 
   describe "intersection" $ do
     it "intersects trivial cases" $ do
-      intersection Bottom Bottom `shouldMatch` []
-      intersection Bottom Top `shouldMatch` []
-      intersection Top Bottom `shouldMatch` []
-      intersection Top Top `shouldMatch` [[]]
+      intersection Bottom Bottom `hasSpan` []
+      intersection Bottom Top `hasSpan` []
+      intersection Top Bottom `hasSpan` []
+      intersection Top Top `hasSpan` [[]]
 
 
     it "intersects nodes with bottom" $ do
@@ -85,8 +85,8 @@ spec = do
                        intersection node Bottom
           result2 = do node <- family [[1], [2..4], []]
                        intersection Bottom node
-      result1 `shouldMatch` []
-      result2 `shouldMatch` []
+      result1 `hasSpan` []
+      result2 `hasSpan` []
 
     it "intersects nodes with top" $ do
       let result1 = do node <- family [[1], [2..4], []]
@@ -97,10 +97,10 @@ spec = do
                        intersection node Top
           result4 = do node <- family [[1], [2..4]]
                        intersection Top node
-      result1 `shouldMatch` [[]]
-      result2 `shouldMatch` [[]]
-      result3 `shouldMatch` []
-      result4 `shouldMatch` []
+      result1 `hasSpan` [[]]
+      result2 `hasSpan` [[]]
+      result3 `hasSpan` []
+      result4 `hasSpan` []
 
     it "takes the intersection of families" $ do
       let fam1 = [[1], [1, 2], [2..4], []]
@@ -108,4 +108,4 @@ spec = do
           result = do f1 <- family fam1
                       f2 <- family fam2
                       intersection f1 f2
-      result `shouldMatch` [[1], [1, 2]]
+      result `hasSpan` [[1], [1, 2]]
