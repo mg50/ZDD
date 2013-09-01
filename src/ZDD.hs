@@ -50,6 +50,9 @@ insert zn zst@(ZStore ctr n i cache) = case M.lookup zn (idsByNode zst)  of
                      n' = M.insert ctr zn n
                      i' = M.insert zn ctr i
 
+insertOpCache op node store = let m = M.insert op node (opCache store)
+                              in store{opCache = m}
+
 reduce :: (Ord a) => ZNode a -> ZStore a -> ZNode a
 reduce zn zst = if hiId zn == 0
                    then case M.lookup (loId zn) (nodesById zst) of

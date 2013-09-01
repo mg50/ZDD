@@ -44,7 +44,9 @@ withMemo ctor x y m = do cache <- opCache <$> get
                            Just val -> return val
                            Nothing -> case M.lookup (ctor y x) cache of
                              Just val -> return val
-                             Nothing -> m >>= yield
+                             Nothing -> do node <- m
+                                           insertOpCache (ctor x y) node <$> get
+                                           yield node
 
 union :: (Ord a) => ZNode a -> ZNode a -> ZDDM a (ZNode a)
 union Bottom node = return node
