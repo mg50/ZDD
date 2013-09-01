@@ -16,9 +16,14 @@ data ZRecord a = ZRecord a !Int !Int
                | TopRec
                | BotRec deriving (Eq, Ord, Show)
 
+data Operation a = Union (ZNode a) (ZNode a)
+                 | Intersection (ZNode a) (ZNode a)
+                 deriving (Show, Eq, Ord)
+
 data ZStore a = ZStore { counter :: !Int
                        , nodesById :: M.Map Int (ZNode a)
                        , idsByNode :: M.Map (ZNode a) Int
+                       , opCache :: M.Map (Operation a) (ZNode a)
                        } deriving (Show, Eq)
 
 lookupById :: Int -> ZStore a -> ZNode a
@@ -33,14 +38,14 @@ lookupByNode node store = case M.lookup node (idsByNode store) of
   Nothing -> error $ "could not find id for node"
 
 emptyZStore :: (Ord a) => ZStore a
-emptyZStore = ZStore 2 a b
+emptyZStore = ZStore 2 a b M.empty
   where a = M.fromList [(0, Bottom), (1, Top)]
         b = M.fromList [(Bottom, 0), (Top, 1)]
 
 insert :: (Ord a) => ZNode a -> ZStore a -> ZStore a
-insert zn zst@(ZStore ctr n i) = case M.lookup zn (idsByNode zst)  of
+insert zn zst@(ZStore ctr n i cache) = case M.lookup zn (idsByNode zst)  of
   Just _  -> zst
-  Nothing -> ZStore ctr' n' i'
+  Nothing -> ZStore ctr' n' i' cache
                where ctr' = ctr + 1
                      n' = M.insert ctr zn n
                      i' = M.insert zn ctr i
