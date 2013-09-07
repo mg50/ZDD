@@ -1,16 +1,16 @@
 module DSLSpec where
 import Test.Hspec
-import Control.Monad
-import Control.Monad.State
+import Control.Monad hiding (join)
+import Control.Monad.State hiding (join)
 import ZDD
 import DSL
-import qualified Data.List as L
 import qualified Data.Set as S
+import Debug.Trace
 
 hasSpan :: ZDDM Int (ZNode Int) -> [[Int]] -> IO ()
 hasSpan m fam = let (node, store) = runZDD m
                     fam' = toList store (lookupByNode node store)
-                in S.fromList (map L.nub fam) `shouldBe` S.fromList fam'
+                in S.fromList fam `shouldBe` S.fromList fam'
 
 debug m = print $ runZDD m
 
@@ -109,3 +109,59 @@ spec = do
                       f2 <- family fam2
                       intersection f1 f2
       result `hasSpan` [[1], [1, 2]]
+
+  describe "join" $ do
+    it "joins a set with bottom" $ do
+      let fam = [[1], [3, 4], [5..7]]
+          result = do f <- family [[1], [3, 4], [5..7]]
+                      join f Bottom
+      result `hasSpan` []
+
+    it "joins a set with top" $ do
+      let fam = [[1], [3, 4], [5..7]]
+          result = do f <- family [[1], [3, 4], [5..7]]
+                      join f Top
+      result `hasSpan` fam
+
+
+    it "joins two complex families" $ do
+      let result1 = do f <- family [[1], [2, 3]]
+                       g <- family [[3], [1]]
+                       join f g
+      result1 `hasSpan` [[1, 3], [1, 2, 3], [1], [2, 3]]
+
+      let result2 = do f <- family [[1], [1, 2]]
+                       g <- family [[1, 2], [3, 4], []]
+                       join f g
+      result2 `hasSpan` [[1, 2], [1, 3, 4], [1, 2, 3, 4], [1]]
+
+  describe "meet" $ do
+    it "takes the meet of a set with bottom" $ do
+      let result1 = family [[1], [3..4]] >>= meet Bottom
+          result2 = family [[1], [3..4]] >>= (Bottom `meet`)
+      result1 `hasSpan` []
+      result2 `hasSpan` []
+
+    it "takes the meet of a set with top" $ do
+      let result1 = family [[1], [3..4]] >>= meet Top
+          result2 = family [[1], [3..4]] >>= (Top `meet`)
+      result1 `hasSpan` [[]]
+      result2 `hasSpan` [[]]
+
+    it "takes the meet of slightly different families" $ do
+      let result = do x <- family [[1]]
+                      y <- family [[1, 2]]
+                      meet x y
+      result `hasSpan` [[1]]
+
+    it "takes the meet of disjoint families" $ do
+      let result = do x <- family [[1]]
+                      y <- family [[9]]
+                      meet x y
+      result `hasSpan` [[]]
+
+    it "takes the meet of complex faxmilies" $ do
+      let result = do x <- family [[1], [2, 3], [], [4, 5, 10]]
+                      y <- family [[4, 5, 3, 1], [2, 1, 10]]
+                      meet x y
+      result `hasSpan` [[], [1], [2], [3], [4, 5], [10]]
